@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="12dp">
+
+    <!-- Status koneksi / info singkat -->
+    <TextView
+        android:id="@+id/tvStatus"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Belum terhubung"
+        android:textSize="14sp"
+        android:paddingBottom="4dp" />
+
+    <!-- Baris No Produksi + tombol Start & Export -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <EditText
+            android:id="@+id/etNoProduksi"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:hint="No Produksi"
+            android:singleLine="true"
+            android:inputType="number" />
+
+        <Button
+            android:id="@+id/btnStartSession"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Start"
+            android:layout_marginStart="8dp" />
+
+        <Button
+            android:id="@+id/btnExport"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Export"
+            android:layout_marginStart="8dp" />
+    </LinearLayout>
+
+    <!-- Tombol Delete Last + No Urut + Add Dummy -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginTop="4dp">
+
+        <Button
+            android:id="@+id/btnDeleteLast"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Delete Last" />
+
+        <Button
+            android:id="@+id/btnSetNoUrut"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="No Urut"
+            android:layout_marginStart="8dp" />
+
+        <Button
+            android:id="@+id/btnAddDummy"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Add Dummy"
+            android:layout_marginStart="8dp"
+            android:visibility="gone" />
+
+    </LinearLayout>
+
+    <!-- Total berat tab aktif -->
+    <TextView
+        android:id="@+id/tvTotalWeight"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Total: 0.00 kg"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:gravity="end"
+        android:paddingEnd="4dp" />
+
+    <!-- Label tab aktif -->
+    <TextView
+        android:id="@+id/tvActiveTabLabel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:background="#2E7D32"
+        android:gravity="center"
+        android:paddingTop="4dp"
+        android:paddingBottom="4dp"
+        android:text="PRODUKSI"
+        android:textColor="#FFFFFF"
+        android:textSize="13sp"
+        android:textStyle="bold" />
+
+    <!-- List data timbangan -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rvDataTimbangan"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginTop="8dp" />
+
+    <!-- Tab bar kategori -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="8dp"
+        android:baselineAligned="false">
+
+        <Button
+            android:id="@+id/btnTabProduksi"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="48dp"
+            android:text="Produksi"
+            android:textSize="11sp"
+            android:padding="4dp" />
+
+        <Button
+            android:id="@+id/btnTabBsPotongan"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="48dp"
+            android:text="BS Potongan"
+            android:textSize="11sp"
+            android:padding="4dp"
+            android:layout_marginStart="4dp" />
+
+        <Button
+            android:id="@+id/btnTabBsRoll"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="48dp"
+            android:text="BS Roll"
+            android:textSize="11sp"
+            android:padding="4dp"
+            android:layout_marginStart="4dp" />
+
+        <Button
+            android:id="@+id/btnTabRontokan"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="48dp"
+            android:text="Rontokan"
+            android:textSize="11sp"
+            android:padding="4dp"
+            android:layout_marginStart="4dp" />
+
+    </LinearLayout>
+
+</LinearLayout>
