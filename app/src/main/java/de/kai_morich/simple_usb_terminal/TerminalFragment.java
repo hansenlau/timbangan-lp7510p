@@ -101,6 +101,8 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
 
     // --- Per-kategori data lists ---
     private final StringBuilder readBuffer = new StringBuilder();
+    // true kalau blok print LP7510P yang sedang berjalan sudah menghasilkan satu row
+    private boolean blockCommitted = false;
     private final List<WeightRow> weightRows = new ArrayList<>();
     private final List<WeightRow> bsPotonganRows = new ArrayList<>();
     private final List<WeightRow> bsRollRows = new ArrayList<>();
@@ -261,7 +263,7 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
                 return;
             }
             double randomKg = 1.0 + (Math.random() * 98.99);
-            String dummyLine = String.format(Locale.US, "US,NT,+%07.2fkg", randomKg);
+            String dummyLine = String.format(Locale.US, "Gross %.2fkg", randomKg);
             addWeightRow(dummyLine, System.currentTimeMillis());
         });
 
@@ -498,7 +500,7 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
         try {
             usbSerialPort.open(usbConnection);
             try {
-                usbSerialPort.setParameters(baudRate, UsbSerialPort.DATABITS_7, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_EVEN);
+                usbSerialPort.setParameters(baudRate, UsbSerialPort.DATABITS_8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE);
             } catch (UnsupportedOperationException e) {
                 status("Setting serial parameters failed: " + e.getMessage());
             }
@@ -693,10 +695,33 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
             while ((idx = readBuffer.indexOf("\n")) != -1) {
                 String line = readBuffer.substring(0, idx).trim();
                 readBuffer.delete(0, idx + 1);
-                if (sessionActive && !line.isEmpty()) {
-                    addWeightRow(line, receivedAt);
+                if (!line.isEmpty()) {
+                    processScaleLine(line, receivedAt);
                 }
             }
+        }
+    }
+
+    /*
+     * Parser blok print LP7510P.
+     * Tanpa tare : Date: / Time: / Gross ...kg
+     * Dengan tare: Date: / Time: / Net ...kg / Tare ...kg / Gross ...kg
+     * Yang direkam: Net kalau ada (setelah tare), selain itu Gross.
+     */
+    private void processScaleLine(String line, long receivedAt) {
+        String normalized = line.replaceAll("\\s+", " ");
+        if (normalized.startsWith("Date:")) {
+            blockCommitted = false; // blok print baru dimulai
+            return;
+        }
+        if (normalized.startsWith("Time:") || normalized.startsWith("Tare"))
+            return;
+        if (blockCommitted)
+            return; // Gross setelah Net di blok tare — sudah terekam
+        if (normalized.startsWith("Net") || normalized.startsWith("Gross")) {
+            blockCommitted = true;
+            if (sessionActive)
+                addWeightRow(normalized, receivedAt);
         }
     }
 
@@ -811,28 +836,21 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
         }
     }
 
+    // Contoh raw LP7510P: "Gross 40.05kg" atau "Net 20.05kg"
+    private static final java.util.regex.Pattern WEIGHT_PATTERN =
+            java.util.regex.Pattern.compile("([-+]?\\d+(?:\\.\\d+)?)\\s*kg", java.util.regex.Pattern.CASE_INSENSITIVE);
+
     private String extractWeight(String raw) {
         if (raw == null) return "";
-        String part = raw;
-
-        // Contoh raw: "US,NT,+0000.65kg"
-        int idx = part.lastIndexOf(',');
-        if (idx >= 0 && idx < part.length() - 1) {
-            part = part.substring(idx + 1);
+        java.util.regex.Matcher m = WEIGHT_PATTERN.matcher(raw);
+        if (m.find()) {
+            try {
+                double val = Double.parseDouble(m.group(1));
+                return String.format(Locale.US, "%.2f", val);
+            } catch (NumberFormatException ignored) {
+            }
         }
-
-        part = part.trim();
-        if (part.toLowerCase(Locale.US).endsWith("kg")) {
-            part = part.substring(0, part.length() - 2);
-        }
-        part = part.replace("+", "");
-
-        try {
-            double val = Double.parseDouble(part);
-            return String.format(Locale.US, "%.2f", val);
-        } catch (NumberFormatException e) {
-            return part;
-        }
+        return raw.trim();
     }
 
     private void updateTotalWeight() {
