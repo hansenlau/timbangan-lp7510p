@@ -20,6 +20,7 @@ import android.os.Looper;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
@@ -86,6 +87,10 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
     // --- State ---
     private Connected connected = Connected.False;
     private boolean initialStart = true;
+
+    // --- Auto-reconnect ---
+    private boolean reconnecting = false;
+    private static final long RECONNECT_DELAY_MS = 3000;
 
     private boolean sessionActive = false;
     private String currentNoProduksi = "";
@@ -191,6 +196,9 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
         if(initialStart && service != null) {
             initialStart = false;
             requireActivity().runOnUiThread(this::connect);
+        } else if (service != null && connected == Connected.False && deviceId != -1) {
+            // kembali ke depan setelah link putus saat background -> sambung ulang
+            scheduleReconnect();
         }
     }
 
@@ -249,6 +257,9 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
 
         // Set initial tab state (Produksi aktif)
         updateTabUI();
+
+        // Re-apply keep-screen-on kalau view dibuat ulang saat session masih aktif
+        if (sessionActive) keepScreenOn(true);
 
         // --- Tab click listeners ---
         btnTabProduksi.setOnClickListener(v -> switchTab(ActiveTab.PRODUKSI));
@@ -329,6 +340,7 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
             etNoProduksi.setEnabled(false);
             btnStartSession.setEnabled(false);
             tvStatus.setText("Session aktif: " + currentNoProduksi);
+            keepScreenOn(true); // cegah layar tidur -> USB tidak diputus saat jeda lama
         });
 
         // --- Export ---
@@ -579,7 +591,17 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
         weightAdapter.notifyDataSetChanged();
         updateTabUI();
         updateTotalWeight();
+        keepScreenOn(false); // session selesai -> biarkan layar hemat baterai lagi
         tvStatus.setText("Export selesai. Session berakhir.");
+    }
+
+    private void keepScreenOn(boolean on) {
+        Activity act = getActivity();
+        if (act == null) return;
+        if (on)
+            act.getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        else
+            act.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     }
 
     private String buildProduksiCsv() {
@@ -770,8 +792,34 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
 
     @Override
     public void onSerialIoError(Exception e) {
-        status("connection lost: " + e.getMessage());
+        status("Koneksi terputus, mencoba sambung ulang...");
         disconnect();
+        scheduleReconnect();
+    }
+
+    /*
+     * Auto-reconnect: coba sambung ulang sendiri saat link putus, tanpa
+     * kehilangan data session (weightRows dll. tetap tersimpan di fragment).
+     */
+    private void scheduleReconnect() {
+        if (deviceId == -1) return;   // dummy/test mode, tidak ada USB
+        if (reconnecting) return;     // sudah ada loop reconnect berjalan
+        reconnecting = true;
+        mainLooper.postDelayed(this::attemptReconnect, RECONNECT_DELAY_MS);
+    }
+
+    private void attemptReconnect() {
+        if (deviceId == -1 || connected == Connected.True || !isResumed()) {
+            reconnecting = false;
+            return;
+        }
+        connect();
+        if (connected == Connected.True) {
+            reconnecting = false;
+        } else {
+            // gagal (mis. kabel belum tersambung) -> coba lagi
+            mainLooper.postDelayed(this::attemptReconnect, RECONNECT_DELAY_MS);
+        }
     }
 
     /*
