@@ -20,7 +20,6 @@ import android.os.Looper;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
@@ -91,6 +90,8 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
     // --- Auto-reconnect ---
     private boolean reconnecting = false;
     private static final long RECONNECT_DELAY_MS = 3000;
+    // identitas USB timbangan; dipakai reconnect kalau deviceId berubah akibat enumerasi ulang
+    private int usbVendorId = -1, usbProductId = -1;
 
     private boolean sessionActive = false;
     private String currentNoProduksi = "";
@@ -258,9 +259,6 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
         // Set initial tab state (Produksi aktif)
         updateTabUI();
 
-        // Re-apply keep-screen-on kalau view dibuat ulang saat session masih aktif
-        if (sessionActive) keepScreenOn(true);
-
         // --- Tab click listeners ---
         btnTabProduksi.setOnClickListener(v -> switchTab(ActiveTab.PRODUKSI));
         btnTabBsPotongan.setOnClickListener(v -> switchTab(ActiveTab.BS_POTONGAN));
@@ -340,7 +338,6 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
             etNoProduksi.setEnabled(false);
             btnStartSession.setEnabled(false);
             tvStatus.setText("Session aktif: " + currentNoProduksi);
-            keepScreenOn(true); // cegah layar tidur -> USB tidak diputus saat jeda lama
         });
 
         // --- Export ---
@@ -474,10 +471,22 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
         for(UsbDevice v : usbManager.getDeviceList().values())
             if(v.getDeviceId() == deviceId)
                 device = v;
+        // Reconnect: kalau device enumerasi ulang, deviceId berubah -> cari via vendor/product
+        if(device == null && usbVendorId != -1) {
+            for(UsbDevice v : usbManager.getDeviceList().values())
+                if(v.getVendorId() == usbVendorId && v.getProductId() == usbProductId) {
+                    device = v;
+                    deviceId = v.getDeviceId(); // pakai id baru
+                    break;
+                }
+        }
         if(device == null) {
             status("connection failed: device not found");
             return;
         }
+        // Ingat identitas device untuk reconnect berikutnya
+        usbVendorId = device.getVendorId();
+        usbProductId = device.getProductId();
         UsbSerialDriver driver = UsbSerialProber.getDefaultProber().probeDevice(device);
         if(driver == null) {
             driver = CustomProber.getCustomProber().probeDevice(device);
@@ -591,17 +600,7 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
         weightAdapter.notifyDataSetChanged();
         updateTabUI();
         updateTotalWeight();
-        keepScreenOn(false); // session selesai -> biarkan layar hemat baterai lagi
         tvStatus.setText("Export selesai. Session berakhir.");
-    }
-
-    private void keepScreenOn(boolean on) {
-        Activity act = getActivity();
-        if (act == null) return;
-        if (on)
-            act.getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        else
-            act.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     }
 
     private String buildProduksiCsv() {
