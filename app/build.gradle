@@ -17,8 +17,8 @@ android {
         vectorDrawables.useSupportLibrary true
 
         applicationId 'com.hansen.timbanganlp7510p'
-        versionCode 9
-        versionName "2.0.2"
+        versionCode 10
+        versionName "2.0.3"
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8

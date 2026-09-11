@@ -608,7 +608,7 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
         sb.append("NoProduksi;NoUrut;Berat(kg);Raw;Timestamp\n");
         for (WeightRow r : weightRows) {
             sb.append(currentNoProduksi).append(";")
-                    .append(r.index).append(";")
+                    .append(currentNoProduksi).append("-").append(r.index).append(";") // NoUrut jadi lot id: 60511-1
                     .append(extractWeight(r.value)).append(";")
                     .append(r.value).append(";")
                     .append(r.timeFull).append("\n");
