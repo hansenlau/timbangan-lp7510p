@@ -85,6 +85,14 @@ public class DevicesFragment extends ListFragment {
         super.onActivityCreated(savedInstanceState);
         setListAdapter(null);
         View header = getActivity().getLayoutInflater().inflate(R.layout.device_list_header, null, false);
+        TextView tvVersion = header.findViewById(R.id.tvVersion);
+        String versionName = "";
+        try {
+            versionName = getActivity().getPackageManager()
+                    .getPackageInfo(getActivity().getPackageName(), 0).versionName;
+        } catch (Exception ignored) {
+        }
+        tvVersion.setText("Versi " + versionName);
         getListView().addHeaderView(header, null, false);
         setEmptyText("<no USB devices found>");
         ((TextView) getListView().getEmptyView()).setTextSize(18);
