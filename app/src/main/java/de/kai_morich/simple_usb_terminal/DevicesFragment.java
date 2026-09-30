@@ -1,11 +1,27 @@
 package de.kai_morich.simple_usb_terminal;
 
+import android.annotation.SuppressLint;
+import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.ContentResolver;
 import android.content.Context;
 import android.content.DialogInterface;
+import android.content.Intent;
 import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbManager;
+import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
+
+import androidx.documentfile.provider.DocumentFile;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 
 import androidx.annotation.NonNull;
 import androidx.fragment.app.Fragment;
@@ -43,6 +59,8 @@ public class DevicesFragment extends ListFragment {
     private final ArrayList<ListItem> listItems = new ArrayList<>();
     private ArrayAdapter<ListItem> listAdapter;
     private int baudRate = 9600;
+
+    private static final int REQUEST_EXPORT_USB_TREE = 4711;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -158,9 +176,104 @@ public class DevicesFragment extends ListFragment {
                 builder.show();
             }
             return true;
+        } else if (id == R.id.export_usb) {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
+                Toast.makeText(getActivity(), "Fitur ini butuh Android 5.0+", Toast.LENGTH_SHORT).show();
+                return true;
+            }
+            Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+            intent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            try {
+                Toast.makeText(getActivity(), "Pilih drive USB tujuan", Toast.LENGTH_SHORT).show();
+                startActivityForResult(intent, REQUEST_EXPORT_USB_TREE);
+            } catch (Exception e) {
+                Toast.makeText(getActivity(), "Tidak bisa membuka pemilih folder", Toast.LENGTH_SHORT).show();
+            }
+            return true;
         } else {
             return super.onOptionsItemSelected(item);
         }
+    }
+
+    @Override
+    public void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQUEST_EXPORT_USB_TREE && resultCode == Activity.RESULT_OK && data != null) {
+            Uri treeUri = data.getData();
+            if (treeUri != null)
+                exportLast7DaysToTree(treeUri);
+        }
+    }
+
+    /*
+     * Export semua CSV (7 hari terakhir) ke drive USB pilihan admin lewat SAF.
+     * Hanya menyalin (data asli di HP tidak diubah/dihapus). Terisolasi dari
+     * jalur serial/timbangan sepenuhnya.
+     */
+    @SuppressLint("NewApi") // hanya dipanggil setelah cek SDK_INT >= LOLLIPOP di menu
+    private void exportLast7DaysToTree(final Uri treeUri) {
+        final Activity activity = getActivity();
+        if (activity == null) return;
+        final Context appCtx = activity.getApplicationContext();
+
+        File srcDir = activity.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+        final long cutoff = System.currentTimeMillis() - 7L * 24 * 60 * 60 * 1000; // 7 hari
+        final ArrayList<File> toCopy = new ArrayList<>();
+        if (srcDir != null && srcDir.exists()) {
+            File[] files = srcDir.listFiles();
+            if (files != null)
+                for (File f : files)
+                    if (f.isFile()
+                            && f.getName().toLowerCase(Locale.US).endsWith(".csv")
+                            && f.lastModified() >= cutoff)
+                        toCopy.add(f);
+        }
+        if (toCopy.isEmpty()) {
+            Toast.makeText(activity, "Tidak ada data CSV 7 hari terakhir", Toast.LENGTH_LONG).show();
+            return;
+        }
+        Toast.makeText(activity, "Menyalin " + toCopy.size() + " file ke USB...", Toast.LENGTH_SHORT).show();
+
+        new Thread(() -> {
+            int ok = 0, fail = 0;
+            try {
+                DocumentFile pickedDir = DocumentFile.fromTreeUri(appCtx, treeUri);
+                String stamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
+                String folderName = "Timbangan_"
+                        + Build.MODEL.replaceAll("[^A-Za-z0-9_-]", "") + "_" + stamp;
+                DocumentFile destDir = pickedDir != null ? pickedDir.createDirectory(folderName) : null;
+                if (destDir == null) {
+                    postToast(activity, "Gagal membuat folder di USB");
+                    return;
+                }
+                ContentResolver resolver = appCtx.getContentResolver();
+                byte[] buffer = new byte[8192];
+                for (File f : toCopy) {
+                    DocumentFile destFile = destDir.createFile("text/csv", f.getName());
+                    if (destFile == null) { fail++; continue; }
+                    try (InputStream in = new FileInputStream(f);
+                         OutputStream out = resolver.openOutputStream(destFile.getUri())) {
+                        if (out == null) { fail++; continue; }
+                        int len;
+                        while ((len = in.read(buffer)) != -1)
+                            out.write(buffer, 0, len);
+                        out.flush();
+                        ok++;
+                    } catch (Exception e) {
+                        fail++;
+                    }
+                }
+                postToast(activity, "Selesai: " + ok + " file tersalin"
+                        + (fail > 0 ? ", " + fail + " gagal" : ""));
+            } catch (Exception e) {
+                postToast(activity, "Gagal export: " + e.getMessage());
+            }
+        }).start();
+    }
+
+    private void postToast(final Activity activity, final String msg) {
+        if (activity == null) return;
+        activity.runOnUiThread(() -> Toast.makeText(activity, msg, Toast.LENGTH_LONG).show());
     }
 
     private boolean isDeveloperModeActive() {

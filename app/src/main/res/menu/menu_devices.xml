@@ -6,4 +6,6 @@
         android:title="Baud rate" />
     <item android:id="@+id/developer_mode"
         android:title="Developer Mode" />
+    <item android:id="@+id/export_usb"
+        android:title="Export ke USB (7 hari)" />
 </menu>
